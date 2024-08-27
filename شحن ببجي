@@ -1,0 +1,74 @@
+pip install django
+django-admin startproject myshop
+cd myshop
+from django.db import models
+
+class Product(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    pubg_id = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+from django.shortcuts import render
+from .models import Product
+
+def product_list(request):
+    products = Product.objects.all()
+    return render(request, 'store/product_list.html', {'products': products})
+<!-- product_list.html -->
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>متجر شدات ببجي</title>
+</head>
+<body>
+    <h1>المنتجات المتاحة</h1>
+    <ul>
+        {% for product in products %}
+        <li>
+            <h2>{{ product.name }}</h2>
+            <p>{{ product.description }}</p>
+            <p>السعر: {{ product.price }} USD</p>
+            <form method="POST" action="/pay/{{ product.id }}">
+                <button type="submit">شراء الآن</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
+import stripe
+from django.conf import settings
+from django.shortcuts import render, get_object_or_404
+
+stripe.api_key = 'your_stripe_secret_key'
+
+def product_pay(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    session = stripe.checkout.Session.create(
+        payment_method_types=['card'],
+        line_items=[{
+            'price_data': {
+                'currency': 'usd',
+                'product_data': {
+                    'name': product.name,
+                },
+                'unit_amount': int(product.price * 100),
+            },
+            'quantity': 1,
+        }],
+        mode='payment',
+        success_url='https://yourdomain.com/success',
+        cancel_url='https://yourdomain.com/cancel',
+    )
+    return redirect(session.url, code=303)
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.product_list, name='product_list'),
+    path('pay/<int:product_id>/', views.product_pay, name='product_pay'),
+]
